@@ -7,7 +7,7 @@ Open Scope ring_scope.
 
 Section Semantics.
 
-Context {ElementType : Set} (interp : ElementType -> Set).
+Context {ElementType : eqType} (interp : ElementType -> eqType).
 
 Local Notation "[[ e ]]" := (interp e).
 
@@ -45,7 +45,7 @@ End Semantics.
 
 Section NetworkTheorySemantics.
 Record NetworkTheorySemantics (syn : NetworkTheorySyntax) := {
-    elementType : ElementType syn -> Set;
+    elementType : ElementType syn -> eqType;
     theoryTensor : forall {t}, TheoryTensor syn t -> TensorSemantics elementType t;
     model : forall {y} (n : Model syn y), InputSemantics elementType y
             -> forall {d u}, NodeOutput syn n u d -> TensorSemantics elementType d;

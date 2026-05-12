@@ -5,53 +5,59 @@ From HB Require Import structures.
 
 Open Scope ring_scope.
 
-Inductive seq1 (A : Type) : Type :=
-| nil1 : A -> seq1 A
-| cons : A -> seq1 A -> seq1 A.
+(* Inductive seq1 (A : Type) : Type := *)
+(* | nil1 : A -> seq1 A *)
+(* | cons : A -> seq1 A -> seq1 A. *)
 
-HB.howto eqType.
-HB.about eqType.
+(* Fixpoint seq1Eq {T : eqType} : rel (seq1 T) := *)
+(*   fun s1 s2 => *)
+(*   match s1, s2 with *)
+(*   | nil1 x, nil1 y => x == y *)
+(*   | cons x xs, cons y ys => (x == y) && seq1Eq xs ys *)
+(*   | _, _ => false *)
+(*   end. *)
 
-Fixpoint seq1Eq {T : eqType} : rel (seq1 T) :=
-  fun s1 s2 =>
-  match s1, s2 with
-  | nil1 x, nil1 y => x == y
-  | cons x xs, cons y ys => (x == y) && seq1Eq xs ys
-  | _, _ => false
-  end.
+(* Definition seq1_eqP {Types : eqType} : Equality.axiom (@seq1Eq Types). *)
+(* Proof. *)
+(* move=> xs ys. *)
+(* apply: (iffP idP). *)
+(* move: xs. *)
+(* elim: ys => y. *)
+(* case => // x. *)
+(* by rewrite /seq1Eq => /eqP ->. *)
+(* move=> ys IH xs. *)
+(* by case: xs => //= x xs /andP [] /eqP -> /(IH _) ->. *)
+(* move=> ->. *)
+(* elim: ys => //= y ys H. *)
+(* apply/andP. *)
+(* by split. *)
+(* Qed. *)
 
-HB.about hasDecEq.Build.
-Definition seq1_eqP {Types : eqType} : Equality.axiom (@seq1Eq Types).
-Proof.
-move=> xs ys.
-apply: (iffP idP).
-move: xs.
-elim: ys => y.
-case => // x.
-by rewrite /seq1Eq => /eqP ->.
-move=> ys IH xs.
-by case: xs => //= x xs /andP [] /eqP -> /(IH _) ->.
-move=> ->.
-elim: ys => //= y ys H.
-apply/andP.
-by split.
-Qed.
+(* HB.instance Definition _ (Types : eqType) := hasDecEq.Build (seq1 Types) seq1_eqP. *)
 
-HB.instance Definition _ (Types : eqType) := hasDecEq.Build (seq1 Types) seq1_eqP.
 
-Fixpoint seq1_to_seq {T : Type} (s : seq1 T) : seq T :=
-  match s with
-  | nil1 x => [:: x]
-  | cons x x0 => x :: seq1_to_seq x0
-  end.
+Section seq1.
+Definition seq1 (A : Type) := {x : seq A | (0 < size x)%nat}.
+Variables (A : eqType).
+
+Definition mem_seq1 (s : seq1 A) := mem_seq (sval s).
+
+Definition seq1_eqclass := seq1 A.
+Identity Coercion seq1_of_eqclass : seq1_eqclass >-> seq1.
+Coercion pred_of_seq1 (s : seq1_eqclass) : {pred A} := mem_seq1 s.
+
+Canonical seq1_predType := PredType (pred_of_seq1 : seq1 A -> pred A).
+End seq1.
+
+Definition seq1_to_seq {T : Type} (s : seq1 T) : seq T := sval s.
 
 Coercion seq1_to_seq : seq1 >-> seq.
 
-Fixpoint map1 {T1 T2 : Type} (f : T1 -> T2) (s : seq1 T1) : seq1 T2 :=
-  match s with
-  | nil1 x => nil1 T2 (f x)
-  | cons x x0 => cons T2 (f x) (map1 f x0)
-  end.
+Definition map1 {T1 T2 : Type} (f : T1 -> T2) (s : seq1 T1) : seq1 T2.
+case: s => x H.
+exists (map f x).
+by rewrite size_map.
+Qed.
 
 Section Syntax.
 
@@ -88,22 +94,23 @@ Definition TensorShapesMatch {Types1 Types2 : eqType}
 Definition InputTypes (Types : eqType) : Type :=
   seq1 (TensorType Types).
 
+Identity Coercion InputTypes_is_seq1 : InputTypes >-> seq1.
+
 Definition HiddenNodeTypes (Types : eqType) : Type :=
   seq (TensorType Types).
 
+Identity Coercion InputTypes_is_seq : HiddenNodeTypes >-> seq.
+
 Definition OutputTypes (Types : eqType) : Type :=
   seq1 (TensorType Types).
+
+Identity Coercion OutputTypes_is_seq1 : OutputTypes >-> seq1.
 
 Record NetworkType (Types : eqType) : Type :=
   networkType {
       inputs : InputTypes Types;
       outputs : OutputTypes Types
     }.
-(* HB.about Equality.type. *)
-(* (* HB.about NetworkType. *) *)
-
-(* HB.howto NetworkType Equality.type. *)
-(* HB.about hasDecEq.Build. *)
 
 Definition NetworkTypeEq {Types : eqType} : rel (NetworkType Types) :=
   fun n1 n2 =>
@@ -137,14 +144,18 @@ Definition NetworkTypesMatch {Types : eqType} (y1 : NetworkType Types)
   (y2 : NetworkType Types) : bool :=
   y1 == y2.
 
+(* Definition seq1_predType (T : eqType) : predType T := *)
+(*   [predType of seq1 T]. *)
+(* Canonical seq1_predType. *)
+
 Record NetworkTheorySyntax := {
     ElementType : eqType;
-    TheoryTensor : TensorType ElementType -> Set;
-    Model : NetworkType ElementType -> Set;
+    TheoryTensor : TensorType ElementType -> eqType;
+    Model : NetworkType ElementType -> eqType;
     NodeOutputName : Set;
-    NodeOutput : forall {y}, Model y -> NodeOutputName -> TensorType ElementType -> Type;
+    NodeOutput : forall {y}, Model y -> NodeOutputName -> TensorType ElementType -> eqType;
     modelOutputs : forall {y} (m : Model y) {d},
-      In d (outputs ElementType y) -> {u : NodeOutputName & NodeOutput m u d};
+      d \in (outputs ElementType y) -> {u : NodeOutputName & NodeOutput m u d};
 
     iso : forall {y1 y2}, Model y1 -> NetworkShapesMatch y1 y2 -> Model y2 -> bool;
     equal : forall {y1 y2}, Model y1 -> NetworkTypesMatch y1 y2 -> Model y2 -> bool;
