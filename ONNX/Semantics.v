@@ -18,14 +18,12 @@ end.
 
 Open Scope tensor_scope.
 
-Definition InputSemantics (n : NetworkType ElementType) :=
+Definition InputSemantics (n : NetworkType ElementType) : Type :=
 match n with
 | networkType inputTypes _ => (* map TensorSemantics inputTypes *)
-    \big[prod/Set]_(i <- inputTypes) (TensorSemantics i)
+    All TensorSemantics inputTypes
+    (* \big[prod/Set]_(i <- inputTypes) (TensorSemantics i) *)
 end.
-(* Check forall {shape : {k : nat & k.-tuple {posnum nat}}}, *)
-(*     'I_(\prod_(i <- projT2 shape) i%:posnum). *)
-(* modn divn *)
 
 Definition TensorOp1 (n : TensorType ElementType) :=
 TensorSemantics n -> TensorSemantics n.
@@ -38,8 +36,9 @@ TensorSemantics n -> TensorSemantics n -> bool.
 
 (* Check this is correct *)
 Definition NetworkSemantics (inputTypes : seq1 (TensorType ElementType))
-                                (outputType : TensorType ElementType) :=
- (\big[prod/Set]_(i <- inputTypes) TensorSemantics i) -> TensorSemantics outputType.
+                                (outputType : TensorType ElementType) : Type :=
+All TensorSemantics inputTypes -> TensorSemantics outputType.
+ (* (\big[prod/Set]_(i <- inputTypes) TensorSemantics i) -> TensorSemantics outputType. *)
 
 End Semantics.
 

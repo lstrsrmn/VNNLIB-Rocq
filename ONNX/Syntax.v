@@ -2,39 +2,59 @@ From Stdlib Require Import List.
 From mathcomp Require Import all_boot all_algebra all_order.
 From mathcomp Require Import interval_inference.
 From HB Require Import structures.
-
+Require Import Stdlib.Program.Equality.
 Open Scope ring_scope.
 
-(* Inductive seq1 (A : Type) : Type := *)
-(* | nil1 : A -> seq1 A *)
-(* | cons : A -> seq1 A -> seq1 A. *)
+Inductive All {T : Type} (P : T -> Type) : seq T -> Type :=
+| nil : All P [::]
+| cons : forall {x xs}, P x -> All P xs -> All P (x :: xs).
 
-(* Fixpoint seq1Eq {T : eqType} : rel (seq1 T) := *)
-(*   fun s1 s2 => *)
-(*   match s1, s2 with *)
-(*   | nil1 x, nil1 y => x == y *)
-(*   | cons x xs, cons y ys => (x == y) && seq1Eq xs ys *)
-(*   | _, _ => false *)
-(*   end. *)
+Fixpoint All_map {T : Type} {P Q : T -> Type} (f : forall {x : T}, P x -> Q x) {xs : seq T} (H : All P xs) : All Q xs :=
+  match H with
+  | nil => Syntax.nil Q
+  | cons x xs' Px Pxs => Syntax.cons Q (@f _ Px) (All_map (fun x => @f x) Pxs)
+  end.
 
-(* Definition seq1_eqP {Types : eqType} : Equality.axiom (@seq1Eq Types). *)
-(* Proof. *)
-(* move=> xs ys. *)
-(* apply: (iffP idP). *)
-(* move: xs. *)
-(* elim: ys => y. *)
-(* case => // x. *)
-(* by rewrite /seq1Eq => /eqP ->. *)
-(* move=> ys IH xs. *)
-(* by case: xs => //= x xs /andP [] /eqP -> /(IH _) ->. *)
-(* move=> ->. *)
-(* elim: ys => //= y ys H. *)
-(* apply/andP. *)
-(* by split. *)
-(* Qed. *)
+Fixpoint All_mapf {T U : Type} {P : U -> Type} {xs : seq T} {f : T -> U} (H : All (P \o f) xs) : All P (map f xs) :=
+  match H with
+  | nil => (nil P : All P [seq f i | i <- [::]])
+  | cons x xs Px Pxs => Syntax.cons P Px (All_mapf Pxs)
+  end.
 
-(* HB.instance Definition _ (Types : eqType) := hasDecEq.Build (seq1 Types) seq1_eqP. *)
+Definition All_inv {T : Type} {P : T -> Type} {x xs}
+(H : All P (x :: xs)) : P x * All P xs :=
+  match H with
+  | cons x xs Px Pxs => (Px, Pxs)
+  end.
 
+Lemma All_in {T : eqType} {P : T -> Type} {xs : seq T} {x : T} : x \in xs -> All P xs -> P x.
+Proof.
+elim: xs => //= x' xs IH.
+rewrite in_cons.
+case E: (x == x') => /= H Pxs.
+dependent destruction Pxs.
+by move/eqP: E => ->.
+apply/IH => //.
+by dependent destruction Pxs.
+Qed.
+
+(* TODO: The proper definition was not working because rocq couldnt figure out x = x *)
+Fixpoint All_zipWith {T : Type} {P Q V : T -> Type} {xs : seq T}
+(f : forall {x}, (P x * Q x) -> V x)
+(H : All P xs * All Q xs) {struct xs} : All V xs.
+  (* match H.1 with *)
+  (* | cons x xs Px Pxs => *)
+  (*     let (Qx, Qxs) := All_inv H.2 in *)
+  (*     Syntax.cons (f (Px, Qx)) (Pxs, Qxs) *)
+  (* | _ => Syntax.nil V *)
+  (* end. *)
+Proof.
+case: xs H.
+move=> _.
+by apply/Syntax.nil.
+move=> x xs [/All_inv [Px Pxs] /All_inv [Qx Qxs]].
+by apply/Syntax.cons/(All_zipWith T P Q V xs f (Pxs, Qxs))/(f _ (Px, Qx)).
+Qed.
 
 Section seq1.
 Definition seq1 (A : Type) := {x : seq A | (0 < size x)%nat}.
@@ -64,7 +84,8 @@ Section Syntax.
 Record TensorType (Types : eqType) : Type :=
   tensorType {
       tensorTypes : Types;
-      tensorDims : {k : nat & k.-tuple {posnum nat}};  (* ^ k}; *)
+      (* tensorDims : {k : nat & k.-tuple {posnum nat}};  (* ^ k}; *) *)
+      tensorDims : {k : nat & {posnum nat} ^ k};
     }.
 
 Definition TensorTypeEq {Types : eqType} : rel (TensorType Types) :=
@@ -152,10 +173,11 @@ Record NetworkTheorySyntax := {
     ElementType : eqType;
     TheoryTensor : TensorType ElementType -> eqType;
     Model : NetworkType ElementType -> eqType;
-    NodeOutputName : Set;
+    NodeOutputName : eqType;
     NodeOutput : forall {y}, Model y -> NodeOutputName -> TensorType ElementType -> eqType;
-    modelOutputs : forall {y} (m : Model y) {d},
-      d \in (outputs ElementType y) -> {u : NodeOutputName & NodeOutput m u d};
+    modelOutputs : forall {y} (m : Model y),
+      All (fun d => {u : NodeOutputName & NodeOutput m u d}) (outputs _ y);
+      (* All (fun d => d \in (outputs ElementType y)) {u : NodeOutputName & NodeOutput m u d}; *)
 
     iso : forall {y1 y2}, Model y1 -> NetworkShapesMatch y1 y2 -> Model y2 -> bool;
     equal : forall {y1 y2}, Model y1 -> NetworkTypesMatch y1 y2 -> Model y2 -> bool;
