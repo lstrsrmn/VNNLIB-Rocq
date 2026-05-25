@@ -20,9 +20,7 @@ Open Scope tensor_scope.
 
 Definition InputSemantics (n : NetworkType ElementType) : Type :=
 match n with
-| networkType inputTypes _ => (* map TensorSemantics inputTypes *)
-    All TensorSemantics inputTypes
-    (* \big[prod/Set]_(i <- inputTypes) (TensorSemantics i) *)
+| networkType inputTypes _ => All TensorSemantics inputTypes
 end.
 
 Definition TensorOp1 (n : TensorType ElementType) :=
@@ -34,11 +32,9 @@ TensorSemantics n -> TensorSemantics n -> TensorSemantics n.
 Definition TensorComp (n : TensorType ElementType) :=
 TensorSemantics n -> TensorSemantics n -> bool.
 
-(* Check this is correct *)
 Definition NetworkSemantics (inputTypes : seq1 (TensorType ElementType))
                                 (outputType : TensorType ElementType) : Type :=
 All TensorSemantics inputTypes -> TensorSemantics outputType.
- (* (\big[prod/Set]_(i <- inputTypes) TensorSemantics i) -> TensorSemantics outputType. *)
 
 End Semantics.
 
@@ -54,7 +50,7 @@ Record NetworkTheorySemantics (syn : NetworkTheorySyntax) := {
     gt : forall {d}, TensorComp elementType d;
     eq : forall {d}, TensorComp elementType d;
     neq : forall {d}, TensorComp elementType d;
-    neg : forall {d}, TensorOp1 elementType d; (* Should maybe be opp not neg *)
+    neg : forall {d}, TensorOp1 elementType d;
     add : forall {d}, TensorOp2 elementType d;
     mul : forall {d}, TensorOp2 elementType d
 }.

@@ -21,6 +21,7 @@ Record InputDeclaration : Type :=
       inputName : Name;
       inputType : TensorType (ElementType n)
     }.
+
 Definition InputDeclarationEq : rel InputDeclaration :=
   fun d1 d2 =>
 match d1, d2 with
@@ -43,6 +44,7 @@ apply/andP.
 split => //.
 by apply/eqb_spec.
 Qed.
+
 HB.instance Definition _ := hasDecEq.Build InputDeclaration InputDeclarationEqP.
 
 Record HiddenDeclaration : Type :=
@@ -75,6 +77,7 @@ apply/and3P.
 split => //.
 by apply/eqb_spec.
 Qed.
+
 HB.instance Definition _ := hasDecEq.Build HiddenDeclaration HiddenDeclarationEqP.
 
 Record OutputDeclaration : Type :=
@@ -82,6 +85,7 @@ Record OutputDeclaration : Type :=
       outputName : Name;
       outputType : TensorType (ElementType n)
     }.
+
 Definition OutputDeclarationEq : rel OutputDeclaration :=
   fun d1 d2 =>
 match d1, d2 with
@@ -104,7 +108,9 @@ apply/andP.
 split => //.
 by apply/eqb_spec.
 Qed.
+
 HB.instance Definition _ := hasDecEq.Build OutputDeclaration OutputDeclarationEqP.
+
 End Decls.
 
 Module NetworkEquivalence.
@@ -112,6 +118,7 @@ Inductive NetworkEquivalence : Set :=
 | none : NetworkEquivalence
 | equal_to : Name -> NetworkEquivalence
 | isomorphic_to : Name -> NetworkEquivalence.
+
 Definition NetworkEquivalenceEq : rel NetworkEquivalence :=
   fun n1 n2 =>
     match n1, n2 with
@@ -120,6 +127,7 @@ Definition NetworkEquivalenceEq : rel NetworkEquivalence :=
     | isomorphic_to name1, isomorphic_to name2 => eqb name1 name2
     | _, _ => false
     end.
+
 Definition NetworkEquivalenceEqP : Equality.axiom NetworkEquivalenceEq.
 Proof.
 move=>x y.
@@ -134,6 +142,7 @@ by apply/eqb_spec.
 Qed.
 
 HB.instance Definition _ := hasDecEq.Build NetworkEquivalence NetworkEquivalenceEqP.
+
 End NetworkEquivalence.
 Import NetworkEquivalence.
 
@@ -147,6 +156,7 @@ Record NetworkDeclaration : Type :=
       outputDeclarations : seq1 (@OutputDeclaration n);
       equivalence : NetworkEquivalence
   }.
+
 Definition NetworkDeclarationEq : rel NetworkDeclaration :=
   fun n1 n2 =>
 match n1, n2 with
@@ -160,6 +170,7 @@ match n1, n2 with
       outputDeclarations1 == outputDeclarations2 &
       equivalence1 == equivalence2]
 end.
+
 Lemma NetworkDeclarationEqP : Equality.axiom NetworkDeclarationEq.
 Proof.
 move=> d1 d2.
@@ -207,6 +218,9 @@ Definition HasHiddenDeclarationMatching (type : TensorType (ElementType n)) :
 Definition HasOutputDeclarationMatching (type : TensorType (ElementType n)) :
   NetworkPredicate :=
   fun network : NetworkDeclaration => type \in (typeOfOutputs network).
+
+Definition HiddenNodePairCompatible (h1 h2 : HiddenDeclaration) : bool :=
+  (nodeOutputName h1 != nodeOutputName h2) && (@hiddenType n h1 == hiddenType h2).
 End Decls.
 
 Module ValidEqualToTarget.
@@ -217,19 +231,30 @@ Record ValidEqualToTarget (name : Name) (d target : NetworkDeclaration) : Prop :
       targetIsNotAnEquivalence : equivalence target = none;
       targetTypesMatch : NetworkTypesMatch (typeOfNetwork d) (typeOfNetwork target);
       targetNamesMatch : name = @networkName n target;
+      targetHiddenNodesCompatible :
+      ((size (hiddenDeclarations d)) == (size (hiddenDeclarations target)))
+      && all (uncurry HiddenNodePairCompatible)
+           (zip (hiddenDeclarations d) (hiddenDeclarations target))
     }.
+
 Definition is_valid_equal_to_target (name : Name) (d target : NetworkDeclaration) : bool :=
   [&& (equivalence target == none),
-    NetworkTypesMatch (typeOfNetwork d) (typeOfNetwork target) &
-    eqb name (@networkName n target)].
+    NetworkTypesMatch (typeOfNetwork d) (typeOfNetwork target),
+    eqb name (@networkName n target),
+    size (hiddenDeclarations d) == size (hiddenDeclarations target) &
+     all (uncurry HiddenNodePairCompatible)
+       (zip (hiddenDeclarations d) (hiddenDeclarations target))].
+
 Lemma ValidEqualToTargetP  name d target :
   reflect (ValidEqualToTarget name d target) (is_valid_equal_to_target name d target).
 Proof.
-apply: (iffP idP) => [ /and3P [H1 H2 H3] | [H1 H2 H3] ].
-split => //.
-by apply/eqP.
-by apply/eqb_spec.
-apply/and3P.
+apply: (iffP idP) => [ /and5P [H1 H2 H3 H4 H5] | [H1 H2 H3 /andP [H4 H5]]].
+  split => //.
+  - by apply/eqP.
+  - by apply/eqb_spec.
+  - apply/andP.
+    by split.
+apply/and5P.
 split => //.
 by apply/eqP.
 by apply/eqb_spec.
@@ -267,7 +292,6 @@ by apply/eqP.
 by apply/eqb_spec.
 Qed.
 
-(* Pointer into the context/nn *)
 Inductive ValidNetworkEquivalence (G : NetworkDeclarations)
   (d : NetworkDeclaration)
   : NetworkEquivalence -> Type :=
@@ -292,21 +316,15 @@ Context {n : NetworkTheorySyntax}.
 Definition TensorVariableType :=
   @NetworkDeclarations n -> TensorType (ElementType n) -> eqType.
 
-(* TODO: These maybe shouldnt be filters. It comes from agda Any. In the life above, it was previously `set`, and is not `seq NetworkDeclaration` which seems like a wrong translation *)
 Definition InputVariable : TensorVariableType :=
   fun G d => {d' : NetworkDeclaration | (d' \in G) && HasInputDeclarationMatching d d'}.
-  (* fun G d => filter (HasInputDeclarationMatching d) G. *)
 
 Definition HiddenVariable : TensorVariableType :=
   fun G d => {d' : NetworkDeclaration | (d' \in G) && HasHiddenDeclarationMatching d d'}.
-(* fun G d => filter (HasHiddenDeclarationMatching d) G. *)
-
 Definition OutputVariable : TensorVariableType :=
   fun G d => {d' : NetworkDeclaration | (d' \in G) && HasOutputDeclarationMatching d d'}.
-(* fun G d => filter (HasOutputDeclarationMatching d) G. *)
 End Decls.
 
-(* Indices should inhabited by something that can index the tensor *)
 Section Decls.
 Context {n : NetworkTheorySyntax}.
 
@@ -316,7 +334,6 @@ Record ElementVariable (TensorVariable : TensorVariableType)
   elementVar {
       shape : {k : nat & {posnum nat}^k} ;  (* ^ k}; *)
       node : TensorVariable G (tensorType _ t shape);
-      (* indices : All (fun x => ordinal (x%:num)) (projT2 shape) *)
       indices : 'I_(\prod_(i < projT1 shape) ((projT2 shape) i)%:posnum)
     }.
 
@@ -331,8 +348,11 @@ Definition OutputElementVariable : NetworkDeclarations -> ElementType n -> Type 
 
 (* TODO: Update tensor library and replace with [dims] notation *)
 (* This didnt work *)
+Local Notation "[ 'dims' ]" := (finfun_of_tuple [tuple]).
 Definition NumericLiteral (t : ElementType n) : eqType :=
-  TheoryTensor n (tensorType _ t (existT _ 0 (finfun_of_tuple ([tuple] : 0.-tuple {posnum nat})))).
+  (* TheoryTensor n (tensorType _ t (existT _ 0 [tuple])). *)
+(* TheoryTensor n (tensorType _ t (existT _ 0 (finfun_of_tuple [tuple]))). *)
+  TheoryTensor n (tensorType _ t (existT _ 0 [dims])).
 
 Inductive ArithExpr (G : NetworkDeclarations) (t : ElementType n) :=
 | constant : NumericLiteral t -> ArithExpr G t
@@ -355,11 +375,12 @@ Inductive CompExpr (G : NetworkDeclarations) (t : ElementType n) :=
 Inductive BoolExpr (G : NetworkDeclarations) :=
 | literal : bool -> BoolExpr G
 | comparason : forall {t}, CompExpr G t -> BoolExpr G
+(* | and : seq1 (BoolExpr G) -> BoolExpr G *)
 | and : BoolExpr G -> seq (BoolExpr G) -> BoolExpr G
+(* | or : seq1 (BoolExpr G) -> BoolExpr G. *)
 | or : BoolExpr G -> seq (BoolExpr G) -> BoolExpr G.
 (* TODO: For these, I would prefer to use seq1, but I get an error I dont understand *)
 
-(* TODO: This may cause issues *)
 Inductive Assertion (G : NetworkDeclarations) : Type :=
 | assert : BoolExpr G -> Assertion G.
 
@@ -374,42 +395,40 @@ Definition CorrespondingHiddenNode
   {y} (model : Model n y) (h : HiddenDeclaration) : Type :=
   NodeOutput n model (nodeOutputName h) (hiddenType h).
 
-(* TODO: Check this *)
 Record NetworkImplementation (d : NetworkDeclaration) : Type :=
   networkImplementation {
       model : Model n (typeOfNetwork d);
       hiddenNodeMapping : All (CorrespondingHiddenNode model) (hiddenDeclarations d);
-      (* \big[prod/Set]_(i <- hiddenDeclarations d) (CorrespondingHiddenNode model i); *)
     }.
 
 Definition NetworkImplementations (I : NetworkDeclarations) : Type :=
   All NetworkImplementation I.
-  (* \big[prod/Set]_(i <- I) (NetworkImplementation i). *)
 
-Program Definition ModelsEqual {name : Name} {d1 d2 : NetworkDeclaration}
+Definition ModelsEqual {name : Name} {d1 d2 : NetworkDeclaration}
   (current : NetworkImplementation d1)
   (pair : NetworkImplementation d2 * ValidEqualToTarget name d1 d2)
   : bool :=
-  model d1 current == _.
-Next Obligation.
-Proof.
-case: v => _.
-rewrite /NetworkTypesMatch => /eqP -> _.
-by apply/model/n0.
-Qed.
+  Syntax.equal n (model d1 current) (targetTypesMatch _ _ _ pair.2) (model d2 pair.1).
 
-(* TODO: This is wrong, but I dont know what it should be for now *)
-Program Definition ModelsIsomorphic {name : Name} {d1 d2 : NetworkDeclaration}
+Definition ModelsIsomorphic {name : Name} {d1 d2 : NetworkDeclaration}
   (current : NetworkImplementation d1)
   (pair : NetworkImplementation d2 * ValidIsomorphicToTarget name d1 d2)
-  : bool := iso n (model d1 current) (_) (model d2 (fst pair)).
-Next Obligation.
-Proof.
-by case: v => _.
-Qed.
+  : bool := iso n (model d1 current) (targetShapesMatch _ _ _ pair.2) (model d2 (fst pair)).
 
 Fixpoint find_implementation (G : NetworkDeclarations) (I : NetworkImplementations G) (d : NetworkDeclaration) (H : d \in G)
                           : NetworkImplementation d.
+(*   := *)
+(* match G with *)
+(* | List.nil => False_rect _ _ *)
+(* | List.cons x xs => *)
+(*     (* let (a, b) := All_inv I in *) *)
+(*     match x == d as H' with *)
+(*     | true => _ *)
+(*     | false => find_implementation xs _ d H *)
+(*     end *)
+(* end. *)
+(* (* Obligations. *) *)
+
 Proof.
 elim: G H I => // d' G' IH.
 rewrite in_cons.

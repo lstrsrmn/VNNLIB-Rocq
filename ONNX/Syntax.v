@@ -31,30 +31,19 @@ Lemma All_in {T : eqType} {P : T -> Type} {xs : seq T} {x : T} : x \in xs -> All
 Proof.
 elim: xs => //= x' xs IH.
 rewrite in_cons.
-case E: (x == x') => /= H Pxs.
-dependent destruction Pxs.
-by move/eqP: E => ->.
-apply/IH => //.
-by dependent destruction Pxs.
+case: (x == x') / eqP => [<- /= _ /All_inv [] // | _ /= H /All_inv [_]]; by apply/IH.
 Qed.
 
-(* TODO: The proper definition was not working because rocq couldnt figure out x = x *)
 Fixpoint All_zipWith {T : Type} {P Q V : T -> Type} {xs : seq T}
 (f : forall {x}, (P x * Q x) -> V x)
-(H : All P xs * All Q xs) {struct xs} : All V xs.
-  (* match H.1 with *)
-  (* | cons x xs Px Pxs => *)
-  (*     let (Qx, Qxs) := All_inv H.2 in *)
-  (*     Syntax.cons (f (Px, Qx)) (Pxs, Qxs) *)
-  (* | _ => Syntax.nil V *)
-  (* end. *)
-Proof.
-case: xs H.
-move=> _.
-by apply/Syntax.nil.
-move=> x xs [/All_inv [Px Pxs] /All_inv [Qx Qxs]].
-by apply/Syntax.cons/(All_zipWith T P Q V xs f (Pxs, Qxs))/(f _ (Px, Qx)).
-Qed.
+(H : All P xs * All Q xs) {struct xs} : All V xs := (* . *)
+  match xs as xs' return All P xs' * All Q xs' -> All V xs' with
+  | List.cons x xs => fun H =>
+      let (Px, Pxs) := All_inv H.1 in
+      let (Qx, Qxs) := All_inv H.2 in
+      cons V (f (Px, Qx)) (All_zipWith (fun x => @f x) (Pxs, Qxs))
+  | _ => fun _ => Syntax.nil V
+  end H.
 
 Section seq1.
 Definition seq1 (A : Type) := {x : seq A | (0 < size x)%nat}.
@@ -84,7 +73,6 @@ Section Syntax.
 Record TensorType (Types : eqType) : Type :=
   tensorType {
       tensorTypes : Types;
-      (* tensorDims : {k : nat & k.-tuple {posnum nat}};  (* ^ k}; *) *)
       tensorDims : {k : nat & {posnum nat} ^ k};
     }.
 
@@ -98,7 +86,6 @@ Definition TensorTypeEqP {Types : eqType} : Equality.axiom (@TensorTypeEq Types)
 Proof.
 move=> xs ys.
 apply: (iffP idP) => [| ->].
-(* move=> H. *)
 case: xs.
 case: ys.
 by move=> t1 d1 t2 d2 /= /andP [] /eqP -> /eqP ->.
@@ -152,22 +139,19 @@ Qed.
 
 HB.instance Definition _ (Types : eqType) := hasDecEq.Build (NetworkType Types) NetworkTypeEqP.
 
-(* TODO: Should this have some guard against mismatched lengths of inputs and outputs? *)
 Definition NetworkShapesMatch {Types1 Types2 : eqType}
   (n1 : NetworkType Types1) (n2 : NetworkType Types2) : bool :=
   match n1, n2 with
     | networkType inputs1 outputs1, networkType inputs2 outputs2 =>
-        all (uncurry TensorShapesMatch) (zip inputs1 inputs2) &&
-          all (uncurry TensorShapesMatch) (zip outputs1 outputs2)
+        [&& all (uncurry TensorShapesMatch) (zip inputs1 inputs2),
+          all (uncurry TensorShapesMatch) (zip outputs1 outputs2),
+          (size inputs1 == size inputs2) &
+          (size outputs1 == size outputs2)]
     end.
 
 Definition NetworkTypesMatch {Types : eqType} (y1 : NetworkType Types)
   (y2 : NetworkType Types) : bool :=
   y1 == y2.
-
-(* Definition seq1_predType (T : eqType) : predType T := *)
-(*   [predType of seq1 T]. *)
-(* Canonical seq1_predType. *)
 
 Record NetworkTheorySyntax := {
     ElementType : eqType;
