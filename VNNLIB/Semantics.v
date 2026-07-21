@@ -4,7 +4,6 @@ From mathcomp Require Import interval_inference.
 From Coq Require Import Strings.String.
 From ONNX Require Import Syntax Semantics.
 From VNNLIB Require Import Syntax.
-Require Import Stdlib.Program.Equality.
 
 Open Scope ring_scope.
 
@@ -13,13 +12,13 @@ Parameter n : NetworkTheorySyntax.
 Parameter n' : NetworkTheorySemantics n.
 
 Definition InputValues (d : NetworkDeclaration) :=
-  All (TensorSemantics (elementType _ n')) (typeOfInputs d).
+  TensorsSemantics (elementType _ n') (typeOfInputs d).
 
 Definition HiddenValues (d : NetworkDeclaration) :=
-  All (TensorSemantics (elementType n n')) (typeOfHiddenNodes d).
+  TensorsSemantics (elementType n n') (typeOfHiddenNodes d).
 
 Definition OutputValues (d : NetworkDeclaration) :=
-  All (TensorSemantics (elementType n n')) (typeOfOutputs d).
+  TensorsSemantics (elementType n n') (typeOfOutputs d).
 
 Record NetworkVariableValues (d : NetworkDeclaration) :=
   variableValues {
@@ -28,30 +27,37 @@ Record NetworkVariableValues (d : NetworkDeclaration) :=
       outputs : OutputValues d;
     }.
 
-Definition createNetworkVariableValues {d} (i : NetworkImplementation d)
-(ia : InputAssignment d) : NetworkVariableValues d :=
-  match i with
-  | networkImplementation network hiddenNodeMapping =>
-      let inputs := All_map (fun _ => theoryTensor n n') ia in
-      let hidden := All_mapf (All_map (fun x => Semantics.model n n' network inputs) hiddenNodeMapping) in
-      let outputs := All_map (fun _ (x : {u : NodeOutputName n & NodeOutput n network u _})
-                              => (Semantics.model n n' network inputs (projT2 x))) (modelOutputs n network) in
-      variableValues d inputs hidden outputs
-  end.
+Definition createNetworkVariableValues {d} (impl : NetworkImplementation d)
+    (ia : InputAssignment d) : NetworkVariableValues d.
+Proof.
+case: impl => network hiddenNodeMapping.
+pose inputs : InputValues d := fun i => theoryTensor n n' (ia i).
+apply: (variableValues d inputs _ (fun i =>
+  Semantics.model n n' network inputs (projT2 (modelOutputs n network i)))).
+move=> i.
+have ilt : (i < size (hiddenDeclarations d))%N.
+  by rewrite -[size (hiddenDeclarations d)](size_map (@hiddenType n)); exact: ltn_ord.
+pose h0 := tnth (in_tuple (hiddenDeclarations d)) (Ordinal ilt).
+have := Semantics.model n n' network inputs (hiddenNodeMapping (Ordinal ilt)).
+by rewrite (tnth_nth (hiddenType h0)) (tnth_nth h0) /typeOfHiddenNodes (nth_map h0).
+Defined.
 
-Definition Environment : NetworkDeclarations -> Type :=
-  All (fun d : NetworkDeclaration => NetworkVariableValues d).
+Definition Environment (G : NetworkDeclarations) : Type :=
+  forall i : 'I_(size G), NetworkVariableValues (tnth (in_tuple G) i).
 
 Definition createEnvironment {G} (xs : NetworkImplementations G) (ys : InputAssignments G) : Environment G :=
-    All_zipWith (fun _ => uncurry createNetworkVariableValues) (xs, ys).
+  fun i => createNetworkVariableValues (xs i) (ys i).
 
-Fixpoint lookupNetwork {G} {P : NetworkDeclaration -> Type} {Q : @NetworkPredicate n} (PG : All P G) (QG : has Q G) : {d : NetworkDeclaration & P d * Q d}.
+Fixpoint lookupNetwork {G} {P : NetworkDeclaration -> Type} {Q : @NetworkPredicate n}
+    (PG : forall i : 'I_(size G), P (tnth (in_tuple G) i)) (QG : has Q G) :
+    {d : NetworkDeclaration & P d * Q d}.
 Proof.
-case: G PG QG => //= d G PG;
-                dependent destruction PG.
+case: G PG QG => //= d G PG.
 case E: (Q d) => /= QG.
+have Pd : P d by have := PG ord0; rewrite (tnth_nth d).
 by exists d.
-by apply/(lookupNetwork G P Q PG QG).
+apply: (lookupNetwork G P Q _ QG) => i.
+by have := PG (lift ord0 i); rewrite !(tnth_nth d).
 Qed.
 
 Section Decls.
@@ -73,7 +79,10 @@ apply/hasP.
 by exists d.
 have [d' [[inputs _ _]] ] := lookupNetwork D H'.
 rewrite /HasInputDeclarationMatching => a.
-exact: All_in a inputs.
+pose T0 := {| tensorTypes := t; tensorDims := shape |}.
+have ilt : (seq.index T0 (typeOfInputs d') < size (typeOfInputs d'))%N.
+  by rewrite index_mem.
+by have := inputs (Ordinal ilt); rewrite (tnth_nth T0) /= nth_index.
 Qed.
 
 Definition hiddenVar {t} (e : HiddenElementVariable G t) : constant t.
@@ -89,7 +98,10 @@ apply/hasP.
 by exists d.
 have [d' [[_ hidden _]] ] := lookupNetwork D H'.
 rewrite /HasHiddenDeclarationMatching => a.
-exact: All_in a hidden.
+pose T0 := {| tensorTypes := t; tensorDims := shape |}.
+have ilt : (seq.index T0 (typeOfHiddenNodes d') < size (typeOfHiddenNodes d'))%N.
+  by rewrite index_mem.
+by have := hidden (Ordinal ilt); rewrite (tnth_nth T0) /= nth_index.
 Qed.
 
 Definition outputVar {t} (e : OutputElementVariable G t) : constant t.
@@ -105,7 +117,10 @@ apply/hasP.
 by exists d.
 have [d' [[_ _ outputs]] ] := lookupNetwork D H'.
 rewrite /HasOutputDeclarationMatching => a.
-exact: All_in a outputs.
+pose T0 := {| tensorTypes := t; tensorDims := shape |}.
+have ilt : (seq.index T0 (typeOfOutputs d') < size (typeOfOutputs d'))%N.
+  by rewrite index_mem.
+by have := outputs (Ordinal ilt); rewrite (tnth_nth T0) /= nth_index.
 Qed.
 
 Fixpoint arithExpr {t : ElementType n} (e : ArithExpr G t) {struct e} : constant t :=

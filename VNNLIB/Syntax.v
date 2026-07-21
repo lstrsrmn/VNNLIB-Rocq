@@ -4,7 +4,6 @@ From mathcomp Require Import interval_inference.
 From HB Require Import structures.
 From Coq Require Import Strings.String.
 From ONNX Require Import Syntax.
-Require Import Stdlib.Program.Equality.
 
 Open Scope ring_scope.
 
@@ -398,11 +397,12 @@ Definition CorrespondingHiddenNode
 Record NetworkImplementation (d : NetworkDeclaration) : Type :=
   networkImplementation {
       model : Model n (typeOfNetwork d);
-      hiddenNodeMapping : All (CorrespondingHiddenNode model) (hiddenDeclarations d);
+      hiddenNodeMapping : forall i : 'I_(size (hiddenDeclarations d)),
+        CorrespondingHiddenNode model (tnth (in_tuple (hiddenDeclarations d)) i);
     }.
 
 Definition NetworkImplementations (I : NetworkDeclarations) : Type :=
-  All NetworkImplementation I.
+  forall i : 'I_(size I), NetworkImplementation (tnth (in_tuple I) i).
 
 Definition ModelsEqual {name : Name} {d1 d2 : NetworkDeclaration}
   (current : NetworkImplementation d1)
@@ -421,7 +421,6 @@ Fixpoint find_implementation (G : NetworkDeclarations) (I : NetworkImplementatio
 (* match G with *)
 (* | List.nil => False_rect _ _ *)
 (* | List.cons x xs => *)
-(*     (* let (a, b) := All_inv I in *) *)
 (*     match x == d as H' with *)
 (*     | true => _ *)
 (*     | false => find_implementation xs _ d H *)
@@ -434,12 +433,11 @@ elim: G H I => // d' G' IH.
 rewrite in_cons.
 case E: (d == d').
 move=> /= _ H.
-dependent destruction H.
 move/eqP: E ->.
-exact: n0.
+by have := H ord0; rewrite (tnth_nth d').
 move=> /= H' H.
-dependent destruction H.
-exact: (IH H' H).
+apply: (IH H') => i.
+by have := H (lift ord0 i); rewrite !(tnth_nth d').
 Qed.
 
 Definition ModelsEquivalent {G} {d} (models : NetworkImplementations G)
@@ -465,19 +463,21 @@ by rewrite -has_find.
 Qed.
 End Decls.
 
-Module ImplementationsRespectEquivalences.
-Inductive ImplementationsRespectEquivalences {n : NetworkTheorySyntax} : forall {G}, ValidNetworkEquivalences G ->
-                                                NetworkImplementations G -> Type :=
-| nil : ImplementationsRespectEquivalences ValidNetworkEquivalences.nil (Syntax.nil NetworkImplementation)
-| cons : forall {G} {d} {e : ValidNetworkEquivalence G d (equivalence d)}
-           {es : ValidNetworkEquivalences G}
-           {i : NetworkImplementation d}
-           {Is : NetworkImplementations G},
-    ModelsEquivalent Is i e ->
-ImplementationsRespectEquivalences es Is ->
-ImplementationsRespectEquivalences (@ValidNetworkEquivalences.cons n _ _ e es) (Syntax.cons _ i Is).
-End ImplementationsRespectEquivalences.
-Import ImplementationsRespectEquivalences.
+(* At every position of the equivalence telescope, the declared equivalence *)
+(* holds of the corresponding model, relative to the models of the          *)
+(* remaining declarations.                                                  *)
+Fixpoint ImplementationsRespectEquivalences {n : NetworkTheorySyntax}
+    {G : @NetworkDeclarations n} (es : ValidNetworkEquivalences G) {struct es} :
+    NetworkImplementations G -> Type.
+Proof.
+case: G / es => [|d ds e es'].
+  exact (fun _ : NetworkImplementations [::] => unit).
+move=> Is.
+have Ids : NetworkImplementations ds.
+  by move=> i; have := Is (lift ord0 i); rewrite !(tnth_nth d).
+exact: ((ModelsEquivalent Ids (Is ord0) e) *
+        (ImplementationsRespectEquivalences n ds es' Ids))%type.
+Defined.
 Section Decls.
 Context {n : NetworkTheorySyntax}.
 
@@ -488,10 +488,11 @@ Record QueryModels (q : Query) : Type :=
     }.
 
 (* Logically, this is not a predicate *)
-Definition InputAssignment : NetworkDeclaration -> Type :=
-  fun d => All (TheoryTensor n) (typeOfInputs d).
+Definition InputAssignment (d : NetworkDeclaration) : Type :=
+  forall i : 'I_(size (typeOfInputs d)),
+    TheoryTensor n (tnth (in_tuple (typeOfInputs d)) i).
 
-Definition InputAssignments (ds : NetworkDeclarations) :  Type :=
-  All InputAssignment ds.
+Definition InputAssignments (ds : NetworkDeclarations) : Type :=
+  forall i : 'I_(size ds), InputAssignment (tnth (in_tuple ds) i).
 
 End Decls.

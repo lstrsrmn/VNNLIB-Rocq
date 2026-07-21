@@ -18,9 +18,13 @@ end.
 
 Open Scope tensor_scope.
 
+(* Semantics of a list of tensor types: one tensor per position. *)
+Definition TensorsSemantics (ds : seq (TensorType ElementType)) : Type :=
+  forall i : 'I_(size ds), TensorSemantics (tnth (in_tuple ds) i).
+
 Definition InputSemantics (n : NetworkType ElementType) : Type :=
 match n with
-| networkType inputTypes _ => All TensorSemantics inputTypes
+| networkType inputTypes _ => TensorsSemantics inputTypes
 end.
 
 Definition TensorOp1 (n : TensorType ElementType) :=
@@ -34,7 +38,7 @@ TensorSemantics n -> TensorSemantics n -> bool.
 
 Definition NetworkSemantics (inputTypes : seq1 (TensorType ElementType))
                                 (outputType : TensorType ElementType) : Type :=
-All TensorSemantics inputTypes -> TensorSemantics outputType.
+TensorsSemantics inputTypes -> TensorSemantics outputType.
 
 End Semantics.
 
