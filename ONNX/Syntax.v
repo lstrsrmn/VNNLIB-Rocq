@@ -2,48 +2,7 @@ From Stdlib Require Import List.
 From mathcomp Require Import all_boot all_algebra all_order.
 From mathcomp Require Import interval_inference.
 From HB Require Import structures.
-Require Import Stdlib.Program.Equality.
 Open Scope ring_scope.
-
-Inductive All {T : Type} (P : T -> Type) : seq T -> Type :=
-| nil : All P [::]
-| cons : forall {x xs}, P x -> All P xs -> All P (x :: xs).
-
-Fixpoint All_map {T : Type} {P Q : T -> Type} (f : forall {x : T}, P x -> Q x) {xs : seq T} (H : All P xs) : All Q xs :=
-  match H with
-  | nil => Syntax.nil Q
-  | cons x xs' Px Pxs => Syntax.cons Q (@f _ Px) (All_map (fun x => @f x) Pxs)
-  end.
-
-Fixpoint All_mapf {T U : Type} {P : U -> Type} {xs : seq T} {f : T -> U} (H : All (P \o f) xs) : All P (map f xs) :=
-  match H with
-  | nil => (nil P : All P [seq f i | i <- [::]])
-  | cons x xs Px Pxs => Syntax.cons P Px (All_mapf Pxs)
-  end.
-
-Definition All_inv {T : Type} {P : T -> Type} {x xs}
-(H : All P (x :: xs)) : P x * All P xs :=
-  match H with
-  | cons x xs Px Pxs => (Px, Pxs)
-  end.
-
-Lemma All_in {T : eqType} {P : T -> Type} {xs : seq T} {x : T} : x \in xs -> All P xs -> P x.
-Proof.
-elim: xs => //= x' xs IH.
-rewrite in_cons.
-case: (x == x') / eqP => [<- /= _ /All_inv [] // | _ /= H /All_inv [_]]; by apply/IH.
-Qed.
-
-Fixpoint All_zipWith {T : Type} {P Q V : T -> Type} {xs : seq T}
-(f : forall {x}, (P x * Q x) -> V x)
-(H : All P xs * All Q xs) {struct xs} : All V xs := (* . *)
-  match xs as xs' return All P xs' * All Q xs' -> All V xs' with
-  | List.cons x xs => fun H =>
-      let (Px, Pxs) := All_inv H.1 in
-      let (Qx, Qxs) := All_inv H.2 in
-      cons V (f (Px, Qx)) (All_zipWith (fun x => @f x) (Pxs, Qxs))
-  | _ => fun _ => Syntax.nil V
-  end H.
 
 Section seq1.
 Definition seq1 (A : Type) := {x : seq A | (0 < size x)%nat}.
@@ -159,11 +118,11 @@ Record NetworkTheorySyntax := {
     Model : NetworkType ElementType -> eqType;
     NodeOutputName : eqType;
     NodeOutput : forall {y}, Model y -> NodeOutputName -> TensorType ElementType -> eqType;
-    modelOutputs : forall {y} (m : Model y),
-      All (fun d => {u : NodeOutputName & NodeOutput m u d}) (outputs _ y);
-      (* All (fun d => d \in (outputs ElementType y)) {u : NodeOutputName & NodeOutput m u d}; *)
+    modelOutputs : forall {y} (m : Model y) (x : (outputs _ y)),
+      [{u : NodeOutputName & NodeOutput m u i} | i <- x];
 
     iso : forall {y1 y2}, Model y1 -> NetworkShapesMatch y1 y2 -> Model y2 -> bool;
     equal : forall {y1 y2}, Model y1 -> NetworkTypesMatch y1 y2 -> Model y2 -> bool;
   }.
+
 End Syntax.
