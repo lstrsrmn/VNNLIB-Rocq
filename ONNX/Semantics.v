@@ -1,6 +1,5 @@
-From Stdlib Require Import List.
 From mathcomp Require Import all_boot all_algebra all_order.
-From mathcomp Require Import interval_inference.
+From mathcomp Require Import interval_inference tensor.
 From ONNX Require Import Syntax.
 
 Open Scope ring_scope.
@@ -16,7 +15,6 @@ match n with
 | tensorType tensorTypes tensorDims => 'nT[[[tensorTypes]]]_(projT2 tensorDims)
 end.
 
-Open Scope tensor_scope.
 
 (* Semantics of a list of tensor types: one tensor per position. *)
 Definition TensorsSemantics (ds : seq (TensorType ElementType)) : Type :=
