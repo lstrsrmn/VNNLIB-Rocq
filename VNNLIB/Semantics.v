@@ -14,8 +14,12 @@ Parameter n' : NetworkTheorySemantics n.
 Definition InputValues (d : NetworkDeclaration) :=
   TensorsSemantics (elementType _ n') (typeOfInputs d).
 
+(* Indexed by the hidden declarations rather than their mapped types, so   *)
+(* that a value can be built directly from a hiddenNodeMapping.            *)
 Definition HiddenValues (d : NetworkDeclaration) :=
-  TensorsSemantics (elementType n n') (typeOfHiddenNodes d).
+  forall i : 'I_(size (hiddenDeclarations d)),
+    TensorSemantics (elementType n n')
+      (hiddenType (tnth (in_tuple (hiddenDeclarations d)) i)).
 
 Definition OutputValues (d : NetworkDeclaration) :=
   TensorsSemantics (elementType n n') (typeOfOutputs d).
@@ -28,19 +32,13 @@ Record NetworkVariableValues (d : NetworkDeclaration) :=
     }.
 
 Definition createNetworkVariableValues {d} (impl : NetworkImplementation d)
-    (ia : InputAssignment d) : NetworkVariableValues d.
-Proof.
-case: impl => network hiddenNodeMapping.
-pose inputs : InputValues d := fun i => theoryTensor n n' (ia i).
-apply: (variableValues d inputs _ (fun i =>
-  Semantics.model n n' network inputs (projT2 (modelOutputs n network i)))).
-move=> i.
-have ilt : (i < size (hiddenDeclarations d))%N.
-  by rewrite -[size (hiddenDeclarations d)](size_map (@hiddenType n)); exact: ltn_ord.
-pose h0 := tnth (in_tuple (hiddenDeclarations d)) (Ordinal ilt).
-have := Semantics.model n n' network inputs (hiddenNodeMapping (Ordinal ilt)).
-by rewrite (tnth_nth (hiddenType h0)) (tnth_nth h0) /typeOfHiddenNodes (nth_map h0).
-Defined.
+    (ia : InputAssignment d) : NetworkVariableValues d :=
+  let: networkImplementation network hiddenNodeMapping := impl in
+  let inputs : InputValues d := fun i => theoryTensor n n' (ia i) in
+  variableValues d inputs
+    (fun i => Semantics.model n n' network inputs (hiddenNodeMapping i))
+    (fun i => Semantics.model n n' network inputs
+       (projT2 (modelOutputs n network (mem_tnth i (in_tuple (typeOfOutputs d)))))).
 
 Definition Environment (G : NetworkDeclarations) : Type :=
   forall i : 'I_(size G), NetworkVariableValues (tnth (in_tuple G) i).
@@ -99,9 +97,11 @@ by exists d.
 have [d' [[_ hidden _]] ] := lookupNetwork D H'.
 rewrite /HasHiddenDeclarationMatching => a.
 pose T0 := {| tensorTypes := t; tensorDims := shape |}.
-have ilt : (seq.index T0 (typeOfHiddenNodes d') < size (typeOfHiddenNodes d'))%N.
-  by rewrite index_mem.
-by have := hidden (Ordinal ilt); rewrite (tnth_nth T0) /= nth_index.
+have ilt : (seq.index T0 (typeOfHiddenNodes d') < size (hiddenDeclarations d'))%N.
+  by rewrite -[size (hiddenDeclarations d')](size_map (@hiddenType n)) index_mem.
+pose h0 := tnth (in_tuple (hiddenDeclarations d')) (Ordinal ilt).
+have := hidden (Ordinal ilt).
+by rewrite (tnth_nth h0) -(nth_map h0 (hiddenType h0)) ?nth_index //.
 Qed.
 
 Definition outputVar {t} (e : OutputElementVariable G t) : constant t.
