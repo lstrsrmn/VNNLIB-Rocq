@@ -8,8 +8,11 @@ From VNNLIB Require Import Syntax.
 Open Scope ring_scope.
 
 (* Parameter G : NetworkDeclarations. *)
-Parameter n : NetworkTheorySyntax.
-Parameter n' : NetworkTheorySemantics n.
+(* Parameter n : NetworkTheorySyntax. *)
+(* Parameter n' : NetworkTheorySemantics n. *)
+
+Section Decls.
+Context {n : NetworkTheorySyntax} {n' : NetworkTheorySemantics n}.
 
 Definition InputValues (d : NetworkDeclaration) :=
   TensorsSemantics (elementType _ n') (typeOfInputs d).
@@ -44,7 +47,7 @@ Definition Environment (G : NetworkDeclarations) : Type :=
   forall i : 'I_(size G), NetworkVariableValues (tnth (in_tuple G) i).
 
 Definition createEnvironment {G} (xs : NetworkImplementations G) (ys : InputAssignments G) : Environment G :=
-  fun i => createNetworkVariableValues (xs i) (ys i).
+  fun i => createNetworkVariableValues (nth _ xs i) (ys i).
 
 Fixpoint lookupNetwork {G} {P : NetworkDeclaration -> Type} {Q : @NetworkPredicate n}
     (PG : forall i : 'I_(size G), P (tnth (in_tuple G) i)) (QG : has Q G) :

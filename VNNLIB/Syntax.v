@@ -7,10 +7,9 @@ From ONNX Require Import Syntax.
 
 Open Scope ring_scope.
 
-Open Scope tensor_scope.
-
 Definition Name : Set := string.
 Identity Coercion Name_to_string : Name >-> string.
+(* Parameter n : NetworkTheorySyntax. *)
 
 Section Decls.
 Context {n : NetworkTheorySyntax}.
@@ -110,9 +109,6 @@ Qed.
 
 HB.instance Definition _ := hasDecEq.Build OutputDeclaration OutputDeclarationEqP.
 
-End Decls.
-
-Module NetworkEquivalence.
 Inductive NetworkEquivalence : Set :=
 | none : NetworkEquivalence
 | equal_to : Name -> NetworkEquivalence
@@ -133,26 +129,21 @@ move=>x y.
 apply: (iffP idP).
 case: x;
 case: y => //=;
-by move=> n m => /eqb_spec ->.
+by move=> n' m => /eqb_spec ->.
 move=> ->.
 case: y => //=;
-move=> n;
+move=> n';
 by apply/eqb_spec.
 Qed.
 
 HB.instance Definition _ := hasDecEq.Build NetworkEquivalence NetworkEquivalenceEqP.
 
-End NetworkEquivalence.
-Import NetworkEquivalence.
-
-Section Decls.
-Context {n : NetworkTheorySyntax}.
 Record NetworkDeclaration : Type :=
   declareNetwork {
       networkName : Name;
-      inputDeclarations : seq1 (@InputDeclaration n);
-      hiddenDeclarations : seq (@HiddenDeclaration n);
-      outputDeclarations : seq1 (@OutputDeclaration n);
+      inputDeclarations : seq1 InputDeclaration;
+      hiddenDeclarations : seq HiddenDeclaration;
+      outputDeclarations : seq1 OutputDeclaration;
       equivalence : NetworkEquivalence
   }.
 
@@ -201,8 +192,10 @@ Definition typeOfOutputs (d : NetworkDeclaration) : OutputTypes (ElementType n) 
 Definition typeOfNetwork (d : NetworkDeclaration) : NetworkType (ElementType n) :=
   networkType _ (typeOfInputs d) (typeOfOutputs d).
 
-Definition NetworkDeclarations := seq NetworkDeclaration.
-Identity Coercion NetworkDeclarations_to_seq : NetworkDeclarations >-> seq.
+(* Notation NetworkDeclarations n := (seq (@NetworkDeclaration n)). *)
+Definition NetworkDeclarations := (seq NetworkDeclaration).
+(* Definition NetworkDeclarations := seq NetworkDeclaration. *)
+(* Identity Coercion NetworkDeclarations_to_seq : NetworkDeclarations >-> seq. *)
 
 Definition NetworkPredicate := NetworkDeclaration -> bool.
 
@@ -219,17 +212,13 @@ Definition HasOutputDeclarationMatching (type : TensorType (ElementType n)) :
   fun network : NetworkDeclaration => type \in (typeOfOutputs network).
 
 Definition HiddenNodePairCompatible (h1 h2 : HiddenDeclaration) : bool :=
-  (nodeOutputName h1 != nodeOutputName h2) && (@hiddenType n h1 == hiddenType h2).
-End Decls.
+  (nodeOutputName h1 != nodeOutputName h2) && (hiddenType h1 == hiddenType h2).
 
-Module ValidEqualToTarget.
-Section Decls.
-Context {n : NetworkTheorySyntax}.
 Record ValidEqualToTarget (name : Name) (d target : NetworkDeclaration) : Prop :=
   validEqualTo {
       targetIsNotAnEquivalence : equivalence target = none;
       targetTypesMatch : NetworkTypesMatch (typeOfNetwork d) (typeOfNetwork target);
-      targetNamesMatch : name = @networkName n target;
+      targetNamesMatch : name = networkName target;
       targetHiddenNodesCompatible :
       ((size (hiddenDeclarations d)) == (size (hiddenDeclarations target)))
       && all (uncurry HiddenNodePairCompatible)
@@ -239,7 +228,7 @@ Record ValidEqualToTarget (name : Name) (d target : NetworkDeclaration) : Prop :
 Definition is_valid_equal_to_target (name : Name) (d target : NetworkDeclaration) : bool :=
   [&& (equivalence target == none),
     NetworkTypesMatch (typeOfNetwork d) (typeOfNetwork target),
-    eqb name (@networkName n target),
+    eqb name (networkName target),
     size (hiddenDeclarations d) == size (hiddenDeclarations target) &
      all (uncurry HiddenNodePairCompatible)
        (zip (hiddenDeclarations d) (hiddenDeclarations target))].
@@ -258,25 +247,25 @@ split => //.
 by apply/eqP.
 by apply/eqb_spec.
 Qed.
-End Decls.
-End ValidEqualToTarget.
-Import ValidEqualToTarget.
-Section Decls.
-Context {n : NetworkTheorySyntax}.
+
+(* End Decls. *)
+(* Module ValidIsomorphicToTarget. *)
+(* Section ValidIsomorphicToTarget. *)
+(* Context {n : NetworkTheorySyntax}. *)
 
 (* TODO: Drop to bool *)
 Record ValidIsomorphicToTarget (name : Name) (d target : NetworkDeclaration) : Prop :=
   validIsomorphicTo {
-      targetIsNotAnEquivalence : equivalence target = none;
-      targetShapesMatch : NetworkShapesMatch (@typeOfNetwork n d) (typeOfNetwork target);
-      targetNamesMatch : name = @networkName n target
+      targetIsNotAnEquivalence' : equivalence target = none;
+      targetShapesMatch : NetworkShapesMatch (typeOfNetwork d) (typeOfNetwork target);
+      targetNamesMatch' : name = networkName target
     }.
 
 Definition is_valid_isomorphic_to_target (name : Name)
   (d target : NetworkDeclaration) : bool :=
   [&& (equivalence target == none),
-    NetworkShapesMatch (@typeOfNetwork n d) (typeOfNetwork target) &
-    eqb name (@networkName n target)].
+    NetworkShapesMatch (typeOfNetwork d) (typeOfNetwork target) &
+    eqb name (networkName target)].
 
 Lemma ValidIsomorphicToTargetP name d target :
   reflect (ValidIsomorphicToTarget name d target) (is_valid_isomorphic_to_target name d target).
@@ -293,27 +282,44 @@ Qed.
 
 Inductive ValidNetworkEquivalence (G : NetworkDeclarations)
   (d : NetworkDeclaration)
-  : NetworkEquivalence -> Type :=
-| none : ValidNetworkEquivalence G d none
-| equal_to : forall {name}, has (is_valid_equal_to_target name d) G ->
+  : NetworkEquivalence -> Prop :=
+| valid_none : ValidNetworkEquivalence G d none
+| valid_equal_to : forall {name}, has (is_valid_equal_to_target name d) G ->
                        ValidNetworkEquivalence G d (equal_to name)
-| isomorphic_to : forall {name}, has (is_valid_isomorphic_to_target name d) G ->
+| valid_isomorphic_to : forall {name}, has (is_valid_isomorphic_to_target name d) G ->
                             ValidNetworkEquivalence G d (isomorphic_to name).
-End Decls.
 
-Module ValidNetworkEquivalences.
-Inductive ValidNetworkEquivalences {n} : @NetworkDeclarations n -> Type :=
-| nil : ValidNetworkEquivalences [::]
-| cons : forall {d ds}, ValidNetworkEquivalence ds d (equivalence d) ->
-                   ValidNetworkEquivalences ds ->
-                   ValidNetworkEquivalences (d :: ds).
-End ValidNetworkEquivalences.
-Import ValidNetworkEquivalences.
-Section Decls.
-Context {n : NetworkTheorySyntax}.
+Definition is_valid_network_equivalence (G : NetworkDeclarations) (d : NetworkDeclaration) : NetworkEquivalence -> bool :=
+  fun e =>
+match e with
+| none => true
+| equal_to name => has (is_valid_equal_to_target name d) G
+| isomorphic_to name =>
+    has (is_valid_isomorphic_to_target name d) G
+end.
+
+Lemma ValidNetworkEquivalenceP (G : NetworkDeclarations) (d : NetworkDeclaration)
+  (e : NetworkEquivalence) :
+  reflect (ValidNetworkEquivalence G d e) (is_valid_network_equivalence G d e).
+Proof.
+apply: (iffP idP).
+case: e => name //=;
+by constructor.
+by case.
+Qed.
+
+(* Definition ValidNetworkEquivalences (ds : NetworkDeclarations) : bool := *)
+(*   all (fun d => is_valid_network_equivalence ds d (equivalence d)) ds. *)
+
+Fixpoint ValidNetworkEquivalences (ds : NetworkDeclarations) : bool :=
+  match ds with
+  | [::] => true
+  | d :: ds' => is_valid_network_equivalence ds d (equivalence d)
+             && ValidNetworkEquivalences ds'
+  end.
 
 Definition TensorVariableType :=
-  @NetworkDeclarations n -> TensorType (ElementType n) -> eqType.
+  NetworkDeclarations -> TensorType (ElementType n) -> eqType.
 
 Definition InputVariable : TensorVariableType :=
   fun G d => {d' : NetworkDeclaration | (d' \in G) && HasInputDeclarationMatching d d'}.
@@ -322,11 +328,6 @@ Definition HiddenVariable : TensorVariableType :=
   fun G d => {d' : NetworkDeclaration | (d' \in G) && HasHiddenDeclarationMatching d d'}.
 Definition OutputVariable : TensorVariableType :=
   fun G d => {d' : NetworkDeclaration | (d' \in G) && HasOutputDeclarationMatching d d'}.
-End Decls.
-
-Section Decls.
-Context {n : NetworkTheorySyntax}.
-
 Record ElementVariable (TensorVariable : TensorVariableType)
                        (G : NetworkDeclarations)
                        (t : ElementType n) :=
@@ -401,8 +402,21 @@ Record NetworkImplementation (d : NetworkDeclaration) : Type :=
         CorrespondingHiddenNode model (tnth (in_tuple (hiddenDeclarations d)) i);
     }.
 
-Definition NetworkImplementations (I : NetworkDeclarations) : Type :=
-  forall i : 'I_(size I), NetworkImplementation (tnth (in_tuple I) i).
+Fixpoint NetworkImplementations (G : NetworkDeclarations) : Type :=
+  forall i : 'I_(size G), NetworkImplementation (tnth (in_tuple G) i).
+
+(* Fixpoint NetworkImplementations (I : NetworkDeclarations) : Type := *)
+(*   if I is d :: ds then NetworkImplementation d * NetworkImplementations ds *)
+(*   else unit. *)
+
+(* Definition NetworkImplementations := seq (sigT NetworkImplementation). *)
+
+(* Inductive NetworkImplementations : NetworkDeclarations -> Type := *)
+(* | NImplNil : NetworkImplementations [::] *)
+(* | NImplCons d ds : *)
+(*   NetworkImplementation d -> *)
+(* NetworkImplementations ds -> *)
+(* NetworkImplementations (d :: ds). *)
 
 Definition ModelsEqual {name : Name} {d1 d2 : NetworkDeclaration}
   (current : NetworkImplementation d1)
@@ -415,79 +429,79 @@ Definition ModelsIsomorphic {name : Name} {d1 d2 : NetworkDeclaration}
   (pair : NetworkImplementation d2 * ValidIsomorphicToTarget name d1 d2)
   : bool := iso n (model d1 current) (targetShapesMatch _ _ _ pair.2) (model d2 (fst pair)).
 
-Fixpoint find_implementation (G : NetworkDeclarations) (I : NetworkImplementations G) (d : NetworkDeclaration) (H : d \in G)
-                          : NetworkImplementation d.
-(*   := *)
-(* match G with *)
-(* | List.nil => False_rect _ _ *)
-(* | List.cons x xs => *)
-(*     match x == d as H' with *)
-(*     | true => _ *)
-(*     | false => find_implementation xs _ d H *)
-(*     end *)
-(* end. *)
-(* (* Obligations. *) *)
+From Stdlib Require Import JMeq.
 
+Lemma in_cons_tail {x d : NetworkDeclaration} {xs : seq NetworkDeclaration} :
+  x != d -> d \in x :: xs -> d \in xs.
 Proof.
-elim: G H I => // d' G' IH.
-rewrite in_cons.
-case E: (d == d').
-move=> /= _ H.
-move/eqP: E ->.
-by have := H ord0; rewrite (tnth_nth d').
-move=> /= H' H.
-apply: (IH H') => i.
-by have := H (lift ord0 i); rewrite !(tnth_nth d').
+move=> ne; rewrite in_cons => /orP [/eqP exd | //].
+by move: ne; rewrite exd eqxx.
 Qed.
 
-Definition ModelsEquivalent {G} {d} (models : NetworkImplementations G)
+Program Fixpoint find_implementation (G : NetworkDeclarations)
+  : NetworkImplementations G -> forall d : NetworkDeclaration, d \in G
+  -> NetworkImplementation d
+  :=
+match G as G' return NetworkImplementations G' -> forall d, d \in G' -> NetworkImplementation d with
+| [::] => fun I d H => False_rect _ (notF H)
+| x :: xs => fun I d H =>
+    match eqVneq x d with
+    | EqNotNeq e => eq_rect x NetworkImplementation _ d e
+    | NeqNotEq ne => find_implementation xs _ d (in_cons_tail ne H)
+    end
+end.
+Next Obligation.
+Proof.
+move: I => /(_ ord_max).
+suff ->: tnth (in_tuple (d::xs)) ord_max = d => //.
+rewrite (tnth_nth d) in_tupleE.
+
+Program Definition ModelsEquivalent {G} {d} (models : NetworkImplementations G)
   (i : NetworkImplementation d) {e : NetworkEquivalence}
-  (v : ValidNetworkEquivalence G d e) : bool.
-Proof.
-case: v.
-exact: true.
-move=> name networkVar.
-have d1 := nth d G (find (is_valid_equal_to_target name d) G).
-have/ValidEqualToTargetP P := nth_find d1 networkVar.
-apply/(ModelsEqual i (_, P)).
-apply/(find_implementation G models).
-apply/mem_nth.
-by rewrite -has_find.
-move=> name networkVar.
-have d1 := nth d G (find (is_valid_isomorphic_to_target name d) G).
-have/ValidIsomorphicToTargetP P := nth_find d1 networkVar.
-apply/(ModelsIsomorphic i (_, P)).
-apply/(find_implementation G models).
-apply/mem_nth.
-by rewrite -has_find.
-Qed.
-End Decls.
+  (networkVar : is_valid_network_equivalence G d e) : bool :=
+match e with
+| none => true
+| equal_to name =>
+    let find_in : (find (is_valid_equal_to_target name d) G < size G)%N
+      := eq_rect _ _ networkVar _
+                     ((has_find (is_valid_equal_to_target name d) G)) in
+    let d1 := nth d G (find (is_valid_equal_to_target name d) G) in
+    let P := ValidEqualToTargetP _ _ _ (nth_find d1 networkVar) in
+    ModelsEqual i ((find_implementation G models _ (mem_nth _ find_in)), P)
+| isomorphic_to name =>
+    let find_in := eq_rect _ _ networkVar _
+                     ((has_find (is_valid_isomorphic_to_target name d) G)) in
+    let d1 := nth d G (find (is_valid_isomorphic_to_target name d) G) in
+    let P := ValidIsomorphicToTargetP _ _ _ (nth_find d1 networkVar) in
+    ModelsIsomorphic i ((find_implementation G models _ (mem_nth _ find_in)), P)
+end.
 
 (* At every position of the equivalence telescope, the declared equivalence *)
 (* holds of the corresponding model, relative to the models of the          *)
 (* remaining declarations.                                                  *)
-Fixpoint ImplementationsRespectEquivalences {n : NetworkTheorySyntax}
-    {G : @NetworkDeclarations n} (es : ValidNetworkEquivalences G) {struct es} :
-    NetworkImplementations G -> Type.
-Proof.
-case: G / es => [|d ds e es'].
-  exact (fun _ : NetworkImplementations [::] => unit).
-move=> Is.
-have Ids : NetworkImplementations ds.
-  by move=> i; have := Is (lift ord0 i); rewrite !(tnth_nth d).
-exact: ((ModelsEquivalent Ids (Is ord0) e) *
-        (ImplementationsRespectEquivalences n ds es' Ids))%type.
+Fixpoint ImplementationsRespectEquivalences
+    {G : NetworkDeclarations}
+    : ValidNetworkEquivalences G ->
+    NetworkImplementations G -> bool.
+case: G => [_ _ | d G es I].
+exact: true.
+apply: andb.
+apply/(ModelsEquivalent I.2 I.1 (e := equivalence d)).
+move: es => /andb_prop /fst.
+case H: (equivalence d) => [// | n' | n' ];
+rewrite /= => /orP [|//].
+by rewrite /is_valid_equal_to_target H.
+by rewrite /is_valid_isomorphic_to_target H.
+move: es => /= /andP [a b].
+apply (@ImplementationsRespectEquivalences G b I.2).
 Defined.
-Section Decls.
-Context {n : NetworkTheorySyntax}.
 
 Record QueryModels (q : Query) : Type :=
   queryModels {
       networkImplementations : NetworkImplementations (networks q);
-      implementationsRespectEquivalences : @ImplementationsRespectEquivalences n _ (equivalences q) networkImplementations
+      implementationsRespectEquivalences : @ImplementationsRespectEquivalences _ (equivalences q) networkImplementations
     }.
 
-(* Logically, this is not a predicate *)
 Definition InputAssignment (d : NetworkDeclaration) : Type :=
   forall i : 'I_(size (typeOfInputs d)),
     TheoryTensor n (tnth (in_tuple (typeOfInputs d)) i).

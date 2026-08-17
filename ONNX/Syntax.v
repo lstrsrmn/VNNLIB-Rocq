@@ -120,7 +120,6 @@ Record NetworkTheorySyntax := {
     NodeOutput : forall {y}, Model y -> NodeOutputName -> TensorType ElementType -> eqType;
     modelOutputs : forall {y} (m : Model y) {d : TensorType ElementType},
       d \in outputs _ y -> {u : NodeOutputName & NodeOutput m u d};
-
     iso : forall {y1 y2}, Model y1 -> NetworkShapesMatch y1 y2 -> Model y2 -> bool;
     equal : forall {y1 y2}, Model y1 -> NetworkTypesMatch y1 y2 -> Model y2 -> bool;
   }.

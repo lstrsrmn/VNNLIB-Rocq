@@ -16,8 +16,6 @@ match n with
 | tensorType tensorTypes tensorDims => 'nT[[[tensorTypes]]]_(projT2 tensorDims)
 end.
 
-Open Scope tensor_scope.
-
 (* Semantics of a list of tensor types: one tensor per position. *)
 Definition TensorsSemantics (ds : seq (TensorType ElementType)) : Type :=
   forall i : 'I_(size ds), TensorSemantics (tnth (in_tuple ds) i).
