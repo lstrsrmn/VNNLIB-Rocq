@@ -1,7 +1,5 @@
-From Stdlib Require Import List.
 From mathcomp Require Import all_boot all_algebra all_order.
-From mathcomp Require Import interval_inference.
-From Coq Require Import Strings.String.
+From mathcomp Require Import interval_inference tensor.
 From ONNX Require Import Syntax Semantics.
 From VNNLIB Require Import Syntax.
 
@@ -47,7 +45,7 @@ Definition Environment (G : NetworkDeclarations) : Type :=
   forall i : 'I_(size G), NetworkVariableValues (tnth (in_tuple G) i).
 
 Definition createEnvironment {G} (xs : NetworkImplementations G) (ys : InputAssignments G) : Environment G :=
-  fun i => createNetworkVariableValues (nth _ xs i) (ys i).
+  fun i => createNetworkVariableValues (xs i) (ys i).
 
 Fixpoint lookupNetwork {G} {P : NetworkDeclaration -> Type} {Q : @NetworkPredicate n}
     (PG : forall i : 'I_(size G), P (tnth (in_tuple G) i)) (QG : has Q G) :
@@ -130,8 +128,8 @@ Fixpoint arithExpr {t : ElementType n} (e : ArithExpr G t) {struct e} : constant
   let d := (tensorType _ t (existT (fun k => {posnum nat} ^ k)%type 0%nat [tuple])) in
   let fix arithExprList {t} (op : constant t -> constant t -> constant t) (e : constant t) (es : seq (ArithExpr G t)) {struct es} : constant t :=
     match es with
-    | List.nil => e
-    | List.cons x xs => op (arithExpr x) (arithExprList op e xs)
+    | [::] => e
+    | x :: xs => op (arithExpr x) (arithExprList op e xs)
     end in
   match e with
   | Syntax.constant a => theoryTensor n n' a
@@ -158,8 +156,8 @@ Definition compExpr {t} (e : CompExpr G t) : bool :=
 Fixpoint boolExpr (e : BoolExpr G) : bool :=
   let fix boolExprList (op : bool -> bool -> bool) (e : bool) (xs : seq (BoolExpr G)) : bool :=
     match xs with
-    | List.nil => e
-    | List.cons x xs => op (boolExpr x) (boolExprList op e xs)
+    | [::] => e
+    | x :: xs => op (boolExpr x) (boolExprList op e xs)
     end in
   match e with
   | literal x => x
@@ -189,3 +187,4 @@ match q, m with
     assertionList networks (createEnvironment models assignment) assertions
 end.
 
+End Decls.

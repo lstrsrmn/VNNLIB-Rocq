@@ -1,4 +1,3 @@
-From Stdlib Require Import List.
 From mathcomp Require Import all_boot all_algebra all_order.
 From mathcomp Require Import interval_inference.
 From HB Require Import structures.

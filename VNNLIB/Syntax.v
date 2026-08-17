@@ -1,15 +1,17 @@
-From Stdlib Require Import List.
 From mathcomp Require Import all_boot all_algebra all_order.
-From mathcomp Require Import interval_inference.
+From mathcomp Require Import interval_inference tensor.
 From HB Require Import structures.
-From Coq Require Import Strings.String.
+From Stdlib Require Import Strings.String.
 From ONNX Require Import Syntax.
 
 Open Scope ring_scope.
 
+(* Strings are an eqType via String.eqb, so names compare with == below. *)
+HB.instance Definition _ := hasDecEq.Build string String.eqb_spec.
+
 Definition Name : Set := string.
 Identity Coercion Name_to_string : Name >-> string.
-(* Parameter n : NetworkTheorySyntax. *)
+HB.instance Definition _ := Equality.copy Name string.
 
 Section Decls.
 Context {n : NetworkTheorySyntax}.
@@ -25,7 +27,7 @@ Definition InputDeclarationEq : rel InputDeclaration :=
 match d1, d2 with
 | declareInput inputName1 inputType1,
   declareInput inputName2 inputType2 =>
-    eqb inputName1 inputName2 && (inputType1 == inputType2)
+    (inputName1 == inputName2) && (inputType1 == inputType2)
 end.
 
 Lemma InputDeclarationEqP : Equality.axiom InputDeclarationEq.
@@ -34,13 +36,12 @@ move=> d1 d2.
 apply: (iffP idP).
 case: d1.
 case: d2 => // n1 t1 n2 t2.
-by rewrite /InputDeclarationEq => /andP [] /eqb_spec -> /eqP ->.
+by rewrite /InputDeclarationEq => /andP [] /eqP -> /eqP ->.
 move=> <-.
 case: d1 => n1 t1.
 rewrite /InputDeclarationEq.
 apply/andP.
-split => //.
-by apply/eqb_spec.
+by split.
 Qed.
 
 HB.instance Definition _ := hasDecEq.Build InputDeclaration InputDeclarationEqP.
@@ -56,7 +57,7 @@ Definition HiddenDeclarationEq : rel HiddenDeclaration :=
     match d1, d2 with
     | declareHidden hiddenName1 hiddenType1 nodeOutputName1,
       declareHidden hiddenName2 hiddenType2 nodeOutputName2 =>
-        [&& eqb hiddenName1 hiddenName2,
+        [&& (hiddenName1 == hiddenName2),
           hiddenType1 == hiddenType2 &
           nodeOutputName1 == nodeOutputName2]
     end.
@@ -67,13 +68,12 @@ move=> d1 d2.
 apply: (iffP idP).
 case: d1.
 case: d2 => // n1 t1 nn1 n2 t2 nn2.
-by rewrite /InputDeclarationEq => /and3P [] /eqb_spec -> /eqP -> /eqP ->.
+by rewrite /InputDeclarationEq => /and3P [] /eqP -> /eqP -> /eqP ->.
 move=> <-.
 case: d1 => n1 t1 nn1.
 rewrite /InputDeclarationEq.
 apply/and3P.
-split => //.
-by apply/eqb_spec.
+by split.
 Qed.
 
 HB.instance Definition _ := hasDecEq.Build HiddenDeclaration HiddenDeclarationEqP.
@@ -89,7 +89,7 @@ Definition OutputDeclarationEq : rel OutputDeclaration :=
 match d1, d2 with
 | declareOutput outputName1 outputType1,
   declareOutput outputName2 outputType2 =>
-    eqb outputName1 outputName2 && (outputType1 == outputType2)
+    (outputName1 == outputName2) && (outputType1 == outputType2)
 end.
 
 Lemma OutputDeclarationEqP : Equality.axiom OutputDeclarationEq.
@@ -98,13 +98,12 @@ move=> d1 d2.
 apply: (iffP idP).
 case: d1.
 case: d2 => // n1 t1 n2 t2.
-by rewrite /OutputDeclarationEq => /andP [] /eqb_spec -> /eqP ->.
+by rewrite /OutputDeclarationEq => /andP [] /eqP -> /eqP ->.
 move=> <-.
 case: d1 => n1 t1.
 rewrite /OutputDeclarationEq.
 apply/andP.
-split => //.
-by apply/eqb_spec.
+by split.
 Qed.
 
 HB.instance Definition _ := hasDecEq.Build OutputDeclaration OutputDeclarationEqP.
@@ -118,8 +117,8 @@ Definition NetworkEquivalenceEq : rel NetworkEquivalence :=
   fun n1 n2 =>
     match n1, n2 with
     | none, none => true
-    | equal_to name1, equal_to name2 => eqb name1 name2
-    | isomorphic_to name1, isomorphic_to name2 => eqb name1 name2
+    | equal_to name1, equal_to name2 => (name1 == name2)
+    | isomorphic_to name1, isomorphic_to name2 => (name1 == name2)
     | _, _ => false
     end.
 
@@ -129,11 +128,9 @@ move=>x y.
 apply: (iffP idP).
 case: x;
 case: y => //=;
-by move=> n' m => /eqb_spec ->.
+by move=> n' m => /eqP ->.
 move=> ->.
-case: y => //=;
-move=> n';
-by apply/eqb_spec.
+by case: y => //=.
 Qed.
 
 HB.instance Definition _ := hasDecEq.Build NetworkEquivalence NetworkEquivalenceEqP.
@@ -154,7 +151,7 @@ match n1, n2 with
     hiddenDeclarations1 outputDeclarations1 equivalence1,
   declareNetwork networkName2 inputDeclarations2
     hiddenDeclarations2 outputDeclarations2 equivalence2 =>
-    [&& eqb networkName1 networkName2,
+    [&& (networkName1 == networkName2),
       inputDeclarations1 == inputDeclarations2,
       hiddenDeclarations1 == hiddenDeclarations2,
       outputDeclarations1 == outputDeclarations2 &
@@ -174,8 +171,7 @@ move=> <-.
 case: d1 => n1 i1 h1 o1 e1.
 rewrite /NetworkDeclarationEq.
 apply/and5P.
-split => //.
-by apply/eqb_spec.
+by split.
 Qed.
 
 HB.instance Definition _ := hasDecEq.Build NetworkDeclaration NetworkDeclarationEqP.
@@ -192,10 +188,8 @@ Definition typeOfOutputs (d : NetworkDeclaration) : OutputTypes (ElementType n) 
 Definition typeOfNetwork (d : NetworkDeclaration) : NetworkType (ElementType n) :=
   networkType _ (typeOfInputs d) (typeOfOutputs d).
 
-(* Notation NetworkDeclarations n := (seq (@NetworkDeclaration n)). *)
-Definition NetworkDeclarations := (seq NetworkDeclaration).
-(* Definition NetworkDeclarations := seq NetworkDeclaration. *)
-(* Identity Coercion NetworkDeclarations_to_seq : NetworkDeclarations >-> seq. *)
+Definition NetworkDeclarations := seq NetworkDeclaration.
+Identity Coercion NetworkDeclarations_to_seq : NetworkDeclarations >-> seq.
 
 Definition NetworkPredicate := NetworkDeclaration -> bool.
 
@@ -228,7 +222,7 @@ Record ValidEqualToTarget (name : Name) (d target : NetworkDeclaration) : Prop :
 Definition is_valid_equal_to_target (name : Name) (d target : NetworkDeclaration) : bool :=
   [&& (equivalence target == none),
     NetworkTypesMatch (typeOfNetwork d) (typeOfNetwork target),
-    eqb name (networkName target),
+    (name == networkName target),
     size (hiddenDeclarations d) == size (hiddenDeclarations target) &
      all (uncurry HiddenNodePairCompatible)
        (zip (hiddenDeclarations d) (hiddenDeclarations target))].
@@ -239,13 +233,13 @@ Proof.
 apply: (iffP idP) => [ /and5P [H1 H2 H3 H4 H5] | [H1 H2 H3 /andP [H4 H5]]].
   split => //.
   - by apply/eqP.
-  - by apply/eqb_spec.
+  - by apply/eqP.
   - apply/andP.
     by split.
 apply/and5P.
 split => //.
 by apply/eqP.
-by apply/eqb_spec.
+by apply/eqP.
 Qed.
 
 (* End Decls. *)
@@ -265,7 +259,7 @@ Definition is_valid_isomorphic_to_target (name : Name)
   (d target : NetworkDeclaration) : bool :=
   [&& (equivalence target == none),
     NetworkShapesMatch (typeOfNetwork d) (typeOfNetwork target) &
-    eqb name (networkName target)].
+    (name == networkName target)].
 
 Lemma ValidIsomorphicToTargetP name d target :
   reflect (ValidIsomorphicToTarget name d target) (is_valid_isomorphic_to_target name d target).
@@ -273,11 +267,11 @@ Proof.
 apply: (iffP idP) => [ /and3P [H1 H2 H3] | [H1 H2 H3] ].
 split => //.
 by apply/eqP.
-by apply/eqb_spec.
+by apply/eqP.
 apply/and3P.
 split => //.
 by apply/eqP.
-by apply/eqb_spec.
+by apply/eqP.
 Qed.
 
 Inductive ValidNetworkEquivalence (G : NetworkDeclarations)
@@ -402,7 +396,7 @@ Record NetworkImplementation (d : NetworkDeclaration) : Type :=
         CorrespondingHiddenNode model (tnth (in_tuple (hiddenDeclarations d)) i);
     }.
 
-Fixpoint NetworkImplementations (G : NetworkDeclarations) : Type :=
+Definition NetworkImplementations (G : NetworkDeclarations) : Type :=
   forall i : 'I_(size G), NetworkImplementation (tnth (in_tuple G) i).
 
 (* Fixpoint NetworkImplementations (I : NetworkDeclarations) : Type := *)
@@ -452,9 +446,22 @@ match G as G' return NetworkImplementations G' -> forall d, d \in G' -> NetworkI
 end.
 Next Obligation.
 Proof.
-move: I => /(_ ord_max).
-suff ->: tnth (in_tuple (d::xs)) ord_max = d => //.
-rewrite (tnth_nth d) in_tupleE.
+by suff <-: tnth (in_tuple (d::xs)) 0 = d.
+Qed.
+Next Obligation.
+move=> i.
+move: (I (fintype.lift ord0 i)).
+by rewrite !(tnth_nth x) /= add0n.
+Qed.
+
+Lemma NetworkImplementationsP {x xs} :
+  NetworkImplementations (x :: xs) -> NetworkImplementation x * NetworkImplementations xs.
+Proof.
+move=> I; split.
+- by have := I ord0; rewrite (tnth_nth x).
+- move=> j; have := I (fintype.lift ord0 j).
+  by rewrite !(tnth_nth x) /= add0n.
+Qed.
 
 Program Definition ModelsEquivalent {G} {d} (models : NetworkImplementations G)
   (i : NetworkImplementation d) {e : NetworkEquivalence}
@@ -486,14 +493,15 @@ Fixpoint ImplementationsRespectEquivalences
 case: G => [_ _ | d G es I].
 exact: true.
 apply: andb.
-apply/(ModelsEquivalent I.2 I.1 (e := equivalence d)).
+move/NetworkImplementationsP: I => [i I].
+apply/(ModelsEquivalent I i (e := equivalence d)).
 move: es => /andb_prop /fst.
 case H: (equivalence d) => [// | n' | n' ];
 rewrite /= => /orP [|//].
 by rewrite /is_valid_equal_to_target H.
 by rewrite /is_valid_isomorphic_to_target H.
 move: es => /= /andP [a b].
-apply (@ImplementationsRespectEquivalences G b I.2).
+apply (@ImplementationsRespectEquivalences G b (NetworkImplementationsP I).2).
 Defined.
 
 Record QueryModels (q : Query) : Type :=
@@ -502,6 +510,7 @@ Record QueryModels (q : Query) : Type :=
       implementationsRespectEquivalences : @ImplementationsRespectEquivalences _ (equivalences q) networkImplementations
     }.
 
+(* Logically, this is not a predicate *)
 Definition InputAssignment (d : NetworkDeclaration) : Type :=
   forall i : 'I_(size (typeOfInputs d)),
     TheoryTensor n (tnth (in_tuple (typeOfInputs d)) i).

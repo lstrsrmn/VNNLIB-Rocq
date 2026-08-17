@@ -1,6 +1,5 @@
-From Stdlib Require Import List.
 From mathcomp Require Import all_boot all_algebra all_order.
-From mathcomp Require Import interval_inference.
+From mathcomp Require Import interval_inference tensor.
 From ONNX Require Import Syntax.
 
 Open Scope ring_scope.
